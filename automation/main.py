@@ -4,19 +4,17 @@ from pathlib import Path
 
 # Importar todos os módulos da automação com imports relativos
 from .logger import setup_logger
+from . import login # Import the new login module
 from . import excel_reader
 from . import dominio
 from . import lancamento
 
-# Define o diretório base do projeto (um nível acima da pasta 'automation')
+# Define o diretório base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_FILE = BASE_DIR / "config.json"
-LOG_DIR = BASE_DIR / "logs"
-SCREENSHOT_DIR = BASE_DIR / "screenshots"
 
-# Configura o logger para usar o diretório base
-log = setup_logger(log_dir=LOG_DIR)
-
+# Configura o logger
+log = setup_logger(log_dir=(BASE_DIR / "logs"))
 
 def load_config(filepath: Path) -> Dict[str, Any]:
     """Loads the JSON configuration file."""
@@ -39,62 +37,66 @@ def main():
     log.info("=== INICIANDO AUTOMAÇÃO DE LANÇAMENTOS CONTÁBEIS ===")
     log.info("=============================================")
 
+    dados_lancamentos = None # Initialize to ensure it's available in 'finally'
+    sucessos, falhas = 0, 0
+
     try:
         # 1. Carregar Configuração
         config = load_config(CONFIG_FILE)
-        config["base_dir"] = BASE_DIR # Add base_dir to config for other modules
+        config["base_dir"] = BASE_DIR
 
-        # (Opcional) Conectar ao RDP
-        # rdp_file = BASE_DIR / "minha_conexao.rdp"
-        # rdp_id_image = BASE_DIR / "imagens" / "rdp_area_trabalho.png"
-        # if not rdp.connect_rdp(str(rdp_file), str(rdp_id_image)):
-        #     log.critical("Não foi possível estabelecer a conexão RDP. Abortando.")
-        #     return
+        # 2. Executar Fluxo de Login
+        log.info("STEP 1: EXECUTING LOGIN FLOW...")
+        login.execute_full_login_flow(config)
+        log.info("Login flow completed. Proceeding to data processing.")
 
-        # 2. Ler e Processar Planilhas Excel
+        # 3. Ler e Processar Planilhas Excel
+        log.info("STEP 2: READING AND PROCESSING EXCEL FILES...")
         planilhas = [config.get("planilha1"), config.get("planilha2")]
         planilhas_paths = [BASE_DIR / p for p in planilhas if p]
 
         if not planilhas_paths:
-            log.critical("Nenhuma planilha especificada no config.json. Abortando.")
+            log.critical("No Excel files specified in config.json. Aborting.")
             return
 
         dados_lancamentos = excel_reader.load_and_process_excel_files(planilhas_paths)
 
         if dados_lancamentos.empty:
-            log.warning("Nenhum dado para processar após a leitura das planilhas. Encerrando.")
+            log.warning("No data found in Excel files. Finishing process.")
             return
 
-        # 3. Navegar até a Tela de Lançamentos no Sistema Domínio
+        # 4. Navegar até a Tela de Lançamentos no Sistema Domínio
+        log.info("STEP 3: NAVIGATING TO ACCOUNTING ENTRIES SCREEN...")
         if not dominio.navigate_to_lancamentos_screen(config):
-            log.critical("Não foi possível navegar para a tela de lançamentos. Abortando.")
+            log.critical("Failed to navigate to the entries screen. Aborting.")
             return
 
-        # 4. Iterar e Realizar Lançamentos
-        sucessos, falhas = 0, 0
+        # 5. Iterar e Realizar Lançamentos
+        log.info("STEP 4: STARTING DATA ENTRY PROCESS...")
         total = len(dados_lancamentos)
-        log.info(f"Iniciando o processo de {total} lançamentos...")
+        log.info(f"Found {total} entries to process.")
 
         for index, row in dados_lancamentos.iterrows():
-            log.info(f"--- Processando Lançamento {index + 1} de {total} ---")
+            log.info(f"--- Processing Entry {index + 1} of {total} ---")
             try:
                 lancamento.preencher_lancamento(row.to_dict(), config)
-                log.info(f"Lançamento {index + 1} (Hist: {row.get('historico', 'N/A')}) bem-sucedido.")
+                log.info(f"Entry {index + 1} (Ref: {row.get('historico', 'N/A')}) completed successfully.")
                 sucessos += 1
             except Exception as e:
-                log.error(f"Falha no lançamento {index + 1}. Erro: {e}")
-                log.error(f"Dados do lançamento: {row.to_dict()}")
+                log.error(f"Failed to process entry {index + 1}. Error: {e}", exc_info=True)
+                log.error(f"Data for failed entry: {row.to_dict()}")
                 falhas += 1
-                # O decorator já salvou um screenshot. O loop continuará.
 
     except Exception as e:
-        log.critical(f"Um erro fatal e inesperado ocorreu na automação: {e}", exc_info=True)
+        log.critical(f"A fatal and unexpected error occurred in the main orchestration: {e}", exc_info=True)
 
     finally:
         log.info("============================================")
-        log.info("========= FIM DA AUTOMAÇÃO =========")
-        if 'dados_lancamentos' in locals():
-            log.info(f"Total de Lançamentos Planejados: {len(dados_lancamentos)}")
-            log.info(f"  -> Sucessos: {sucessos}")
-            log.info(f"  -> Falhas:   {falhas}")
+        log.info("========= AUTOMATION FINISHED =========")
+        if dados_lancamentos is not None:
+            log.info(f"Total Entries Planned: {len(dados_lancamentos)}")
+            log.info(f"  -> Successes: {sucessos}")
+            log.info(f"  -> Failures:  {falhas}")
+        else:
+            log.info("No data was loaded to process.")
         log.info("============================================")

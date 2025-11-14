@@ -5,5 +5,10 @@
   "delay": 0.3,
   "atalhos": {
     "plano_contas": ["fn", "f2"]
+  },
+  "credentials": {
+    "web_user": "seu_usuario_web",
+    "web_pass": "sua_senha_web",
+    "rdp_pass": "sua_senha_rdp"
   }
 }
