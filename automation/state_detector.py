@@ -42,9 +42,9 @@ def detectar_estado_atual(config: Dict[str, Any]) -> Optional[str]:
     short_timeout = 1
 
     for state, image_name in STATE_IMAGES.items():
-        # Using a higher confidence for state detection can prevent false positives.
+        # Using a slightly lower confidence to handle minor rendering variations.
         location = find_image_on_screen(
-            image_name, config, timeout=short_timeout, confidence=0.85
+            image_name, config, timeout=short_timeout, confidence=0.8
         )
         if location:
             log.info(f"State detected: {state} (found image '{image_name}')")
