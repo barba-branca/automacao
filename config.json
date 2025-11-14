@@ -1,14 +1,11 @@
 {
+  "browser_path": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "login_url": "https://ts-plusx1.kblcontabilidade.com.br/",
   "planilha1": "Controle_de_Emprestimos_CDR_2025.xlsx",
   "planilha2": "Controle_Apropriacao_UTI_Movel.xlsx",
   "timeout": 25,
   "delay": 0.3,
   "atalhos": {
     "plano_contas": ["fn", "f2"]
-  },
-  "credentials": {
-    "web_user": "seu_usuario_web",
-    "web_pass": "sua_senha_web",
-    "rdp_pass": "sua_senha_rdp"
   }
 }
