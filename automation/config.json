@@ -1,0 +1,9 @@
+{
+  "planilha1": "Controle_de_Emprestimos_CDR_2025.xlsx",
+  "planilha2": "Controle_Apropriacao_UTI_Movel.xlsx",
+  "timeout": 25,
+  "delay": 0.3,
+  "atalhos": {
+    "plano_contas": ["fn", "f2"]
+  }
+}
