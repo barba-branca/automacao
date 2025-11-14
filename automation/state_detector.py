@@ -8,7 +8,7 @@ from .logger import log
 # The order in which they are checked is important.
 STATE_IMAGES = {
     # Login Flow States
-    "STATE_LOGIN_WEB": "login_kbl_user_field.png",
+"STATE_LOGIN_WEB": "login_kbl_web.png",
     "STATE_LAUNCH_REMOTEAPP": "remoteapp_launch_icon.png",
     "STATE_LOGIN_REMOTEAPP": "login_remoteapp_popup.png",
     "STATE_DESKTOP_REMOTE": "icon_dominio_desktop.png",
