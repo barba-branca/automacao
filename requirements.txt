@@ -7,5 +7,9 @@ pyautogui
 opencv-python
 numpy
 
+# Explicit dependencies for PyAutoGUI's screen functionality to ensure robust installation
+Pillow
+pyscreeze
+
 # For handling accents in Excel column names
 unidecode
