@@ -48,24 +48,25 @@ def _map_columns(df: pd.DataFrame, alias_map: Dict[str, List[str]]) -> pd.DataFr
     log.info(f"Columns renamed to: {list(df_renamed.columns)}")
     return df_renamed
 
-def load_and_process_excel_files(file_paths: List[str]) -> pd.DataFrame:
+def load_and_process_excel_files(file_paths: List[str], header_row: int = 0) -> pd.DataFrame:
     """
     Loads data from a list of Excel files, processes and normalizes it.
 
     Args:
         file_paths: A list of paths to the Excel files.
+        header_row: The row number (0-indexed) to use as the column headers.
 
     Returns:
         A single pandas DataFrame containing the combined and processed data.
     """
     all_data = []
-    log.info(f"Loading data from {len(file_paths)} Excel file(s).")
+    log.info(f"Loading data from {len(file_paths)} Excel file(s), using header row {header_row}.")
 
     for file_path in file_paths:
         try:
             log.info(f"Reading file: {file_path}")
-            # Read all columns as string type to preserve leading zeros in account codes
-            df = pd.read_excel(file_path, engine='openpyxl', dtype=str)
+            # Read all columns as string type and specify the header row
+            df = pd.read_excel(file_path, engine='openpyxl', dtype=str, header=header_row)
 
             # Clean up the dataframe
             df = df.dropna(how='all') # Remove rows that are completely empty

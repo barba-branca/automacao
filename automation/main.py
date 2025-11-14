@@ -26,9 +26,11 @@ def get_lancamento_iterator(config: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
     """Loads data from Excel and returns an iterator over the rows."""
     planilhas = [config.get("planilha1"), config.get("planilha2")]
     paths = [BASE_DIR / p for p in planilhas if p]
+    header_row = config.get("excel_header_row", 0)
+
     if not paths:
         return iter([])
-    df = excel_reader.load_and_process_excel_files(paths)
+    df = excel_reader.load_and_process_excel_files(paths, header_row=header_row)
     return (row.to_dict() for _, row in df.iterrows())
 
 def main():
