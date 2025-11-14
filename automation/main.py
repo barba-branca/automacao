@@ -52,6 +52,7 @@ def main():
 
     try:
         config = load_config(CONFIG_FILE)
+        log.info(f"DEBUG: Configuration dictionary loaded: {config}")
         config["base_dir"] = BASE_DIR
 
         # Open the browser as the very first action. The state machine will handle the rest.
