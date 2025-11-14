@@ -1,89 +1,50 @@
 import pandas as pd
 import unidecode
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from .logger import log
 
-COLUMN_ALIASES = {
-    "cod_debito": ["debito", "debitar", "conta debito", "classificacao debito", "classificacao"],
-    "desc_debito": ["descricao debito", "desc debito", "hist debito"],
-    "cod_credito": ["credito", "creditar", "conta credito", "classificacao credito"],
-    "desc_credito": ["descricao credito", "desc credito", "hist credito"],
-    "valor": ["valor", "vlr", "total"],
-    "historico": ["historico", "descricao", "descr"],
-    "data": ["data", "dt"],
-}
-# Create a flat list of all possible alias names for detection
-KNOWN_ALIASES = [alias for sublist in COLUMN_ALIASES.values() for alias in sublist]
-
 def _normalize_text(text: str) -> str:
+    """Normalizes a string for comparison."""
     if not isinstance(text, str):
         return ""
-    text = unidecode.unidecode(text).lower()
-    return " ".join(text.split())
+    return " ".join(unidecode.unidecode(text).lower().split())
 
-def _find_header_row(df_preview: pd.DataFrame, known_aliases: List[str]) -> Optional[int]:
-    """Analyzes the first ~20 rows of a DataFrame to find the best candidate for a header row."""
-    best_match_count = 0
-    header_row_index = None
+def _map_columns_from_config(df: pd.DataFrame, column_mapping: Dict[str, str]) -> pd.DataFrame:
+    """
+    Renames DataFrame columns based on the user-defined mapping in config.json.
+    """
+    # Create a reverse mapping from the user's column name to our standard name
+    # e.g., {"código da conta a debitar": "cod_debito"}
+    reverse_mapping = {v: k for k, v in column_mapping.items()}
 
-    for i, row in df_preview.head(20).iterrows():
-        match_count = 0
-        for cell in row:
-            normalized_cell = _normalize_text(str(cell))
-            if normalized_cell in known_aliases:
-                match_count += 1
+    # Normalize the keys of the reverse mapping for robust matching
+    normalized_reverse_mapping = {_normalize_text(k): v for k, v in reverse_mapping.items()}
 
-        # A good header should have at least a few matches
-        if match_count > best_match_count and match_count > 2:
-            best_match_count = match_count
-            header_row_index = i
+    rename_dict = {}
+    for col in df.columns:
+        normalized_col = _normalize_text(str(col))
+        if normalized_col in normalized_reverse_mapping:
+            rename_dict[col] = normalized_reverse_mapping[normalized_col]
 
-    if header_row_index is not None:
-        log.info(f"Automatically detected header row at index {header_row_index} with {best_match_count} column matches.")
-    else:
-        log.warning("Could not automatically detect a suitable header row. Defaulting to the first row.")
-
-    return header_row_index
-
-def _map_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Renames DataFrame columns based on the alias map."""
-    rename_map = {}
-    normalized_columns = {col: _normalize_text(str(col)) for col in df.columns}
-
-    for standard_name, aliases in COLUMN_ALIASES.items():
-        for alias in aliases:
-            for original_col, normalized_col in normalized_columns.items():
-                if alias == normalized_col:
-                    if standard_name not in rename_map.values():
-                        rename_map[original_col] = standard_name
-                        break
-            if standard_name in rename_map.values():
-                break
-
-    df_renamed = df.rename(columns=rename_map)
+    df_renamed = df.rename(columns=rename_dict)
     log.info(f"Columns renamed to: {list(df_renamed.columns)}")
     return df_renamed
 
-def load_and_process_excel_files(file_paths: List[str]) -> pd.DataFrame:
+def load_and_process_excel_files(file_paths: List[str], header_row: int, column_mapping: Dict[str, str]) -> pd.DataFrame:
     """
-    Loads data from Excel files, automatically detects the header row,
-    and processes the data.
+    Loads data from Excel, using user-defined header row and column mapping.
     """
     all_data = []
+    log.info(f"Loading data from {len(file_paths)} Excel file(s), using header on row {header_row}.")
+
     for file_path in file_paths:
         try:
-            log.info(f"Processing file: {file_path}")
-
-            # 1. Read the first 20 rows without a header to find the real header
-            df_preview = pd.read_excel(file_path, engine='openpyxl', header=None, nrows=20)
-            header_row = _find_header_row(df_preview, KNOWN_ALIASES)
-
-            # 2. Read the full file using the detected header row (or default to 0)
-            df = pd.read_excel(file_path, engine='openpyxl', dtype=str, header=header_row or 0)
+            log.info(f"Reading file: {file_path}")
+            df = pd.read_excel(file_path, engine='openpyxl', dtype=str, header=header_row)
 
             df = df.dropna(how='all').fillna("")
-            df_processed = _map_columns(df)
+            df_processed = _map_columns_from_config(df, column_mapping)
 
             all_data.append(df_processed)
 
@@ -93,16 +54,17 @@ def load_and_process_excel_files(file_paths: List[str]) -> pd.DataFrame:
             log.error(f"An error occurred while reading '{file_path}': {e}", exc_info=True)
 
     if not all_data:
-        log.warning("No data was loaded from the Excel files.")
+        log.warning("No data was loaded from Excel files.")
         return pd.DataFrame()
 
     combined_df = pd.concat(all_data, ignore_index=True)
     log.info(f"Successfully loaded and combined {len(combined_df)} rows.")
 
-    required_cols = ["cod_debito", "cod_credito", "valor"]
+    # Check if all required standard columns are present after renaming
+    required_cols = list(column_mapping.keys())
     for col in required_cols:
         if col not in combined_df.columns:
-            log.error(f"Critical Column Missing: The final DataFrame does not have a '{col}' column.")
-            raise ValueError(f"A coluna padrão '{col}' não foi encontrada após a detecção automática.")
+            log.error(f"Critical Column Missing: Standard column '{col}' was not found after mapping.")
+            raise ValueError(f"A coluna padrão '{col}' não foi encontrada. Verifique seu 'column_mapping' no config.json.")
 
     return combined_df
