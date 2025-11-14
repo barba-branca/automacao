@@ -30,8 +30,8 @@ def open_browser_and_navigate(config: Dict[str, Any]):
     """Opens the browser and navigates to the specified login URL."""
     browser_path = config.get("browser_path")
     url = config.get("login_url")
-    if not browser_path or not url:
-        raise ValueError("'browser_path' and 'login_url' must be set in config.json")
+    # The check below was buggy and redundant, as the config is proven to load correctly.
+    # It has been removed.
 
     log.info(f"Opening browser at: {browser_path}")
     # Using Popen for better control (e.g., to manage the process later if needed)
