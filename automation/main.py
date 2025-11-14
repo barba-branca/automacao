@@ -14,10 +14,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_FILE = BASE_DIR / "config.json"
 log = setup_logger(log_dir=(BASE_DIR / "logs"))
 
+import json
+
 def load_config(filepath: Path) -> Dict[str, Any]:
     """Loads and returns the JSON configuration."""
     with open(filepath, 'r', encoding='utf-8') as f:
-        return Path(f.read()).read_text()
+        return json.load(f)
 
 
 def get_lancamento_iterator(config: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
