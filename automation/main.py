@@ -1,10 +1,12 @@
+import time
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Iterator
 from pathlib import Path
 
-# Importar todos os módulos da automação com imports relativos
+# Importar todos os módulos da automação
 from .logger import setup_logger
-from . import login # Import the new login module
+from .state_detector import detectar_estado_atual
+from . import login_auto
 from . import excel_reader
 from . import dominio
 from . import lancamento
@@ -26,77 +28,83 @@ def load_config(filepath: Path) -> Dict[str, Any]:
         log.error(f"Configuration file not found: {filepath}")
         raise
     except json.JSONDecodeError:
-        log.error(f"Error decoding JSON from the configuration file: {filepath}")
+        log.error(f"Error decoding JSON: {filepath}")
         raise
+
+def get_lancamento_iterator(config: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+    """Loads Excel data and returns an iterator over the rows."""
+    planilhas = [config.get("planilha1"), config.get("planilha2")]
+    paths = [BASE_DIR / p for p in planilhas if p]
+    if not paths:
+        log.warning("No Excel files configured.")
+        return iter([]) # Return an empty iterator
+
+    df = excel_reader.load_and_process_excel_files(paths)
+    return (row.to_dict() for index, row in df.iterrows())
 
 def main():
     """
-    Main function to orchestrate the entire accounting automation process.
+    Main function to orchestrate the automation using a state machine approach.
     """
     log.info("=============================================")
-    log.info("=== INICIANDO AUTOMAÇÃO DE LANÇAMENTOS CONTÁBEIS ===")
+    log.info("=== INICIANDO AUTOMAÇÃO DE LANÇAMENTOS (STATE-DRIVEN) ===")
     log.info("=============================================")
 
-    dados_lancamentos = None # Initialize to ensure it's available in 'finally'
-    sucessos, falhas = 0, 0
-
     try:
-        # 1. Carregar Configuração
         config = load_config(CONFIG_FILE)
         config["base_dir"] = BASE_DIR
 
-        # 2. Executar Fluxo de Login
-        log.info("STEP 1: EXECUTING LOGIN FLOW...")
-        login.execute_full_login_flow(config)
-        log.info("Login flow completed. Proceeding to data processing.")
+        # Open the browser as the very first action. The state machine will handle the rest.
+        login_auto.open_browser_and_navigate(config)
 
-        # 3. Ler e Processar Planilhas Excel
-        log.info("STEP 2: READING AND PROCESSING EXCEL FILES...")
-        planilhas = [config.get("planilha1"), config.get("planilha2")]
-        planilhas_paths = [BASE_DIR / p for p in planilhas if p]
+        lancamentos_iterator = get_lancamento_iterator(config)
+        current_lancamento = next(lancamentos_iterator, None)
 
-        if not planilhas_paths:
-            log.critical("No Excel files specified in config.json. Aborting.")
-            return
+        while current_lancamento:
+            # Main state-driven loop
+            time.sleep(1) # Small delay to prevent CPU spinning
+            current_state = detectar_estado_atual(config)
 
-        dados_lancamentos = excel_reader.load_and_process_excel_files(planilhas_paths)
+            if current_state is None:
+                log.error("Unknown state. Could not find any recognizable UI element. Retrying in 5 seconds...")
+                time.sleep(5)
+                continue
 
-        if dados_lancamentos.empty:
-            log.warning("No data found in Excel files. Finishing process.")
-            return
+            # --- State Handling ---
+            if current_state == "STATE_LOGIN_WEB":
+                login_auto.perform_web_login(config)
 
-        # 4. Navegar até a Tela de Lançamentos no Sistema Domínio
-        log.info("STEP 3: NAVIGATING TO ACCOUNTING ENTRIES SCREEN...")
-        if not dominio.navigate_to_lancamentos_screen(config):
-            log.critical("Failed to navigate to the entries screen. Aborting.")
-            return
+            elif current_state == "STATE_LAUNCH_REMOTEAPP":
+                login_auto.launch_remoteapp_session(config)
 
-        # 5. Iterar e Realizar Lançamentos
-        log.info("STEP 4: STARTING DATA ENTRY PROCESS...")
-        total = len(dados_lancamentos)
-        log.info(f"Found {total} entries to process.")
+            elif current_state == "STATE_LOGIN_REMOTEAPP":
+                login_auto.perform_remoteapp_login(config)
 
-        for index, row in dados_lancamentos.iterrows():
-            log.info(f"--- Processing Entry {index + 1} of {total} ---")
-            try:
-                lancamento.preencher_lancamento(row.to_dict(), config)
-                log.info(f"Entry {index + 1} (Ref: {row.get('historico', 'N/A')}) completed successfully.")
-                sucessos += 1
-            except Exception as e:
-                log.error(f"Failed to process entry {index + 1}. Error: {e}", exc_info=True)
-                log.error(f"Data for failed entry: {row.to_dict()}")
-                falhas += 1
+            elif current_state == "STATE_DESKTOP_REMOTE":
+                login_auto.start_dominio_application(config)
+
+            elif current_state == "STATE_DOMINIO_MAIN_MENU":
+                dominio.navigate_to_lancamentos_screen(config)
+
+            elif current_state == "STATE_LANCAMENTOS_SCREEN":
+                log.info(f"--- Processing Entry: {current_lancamento.get('historico', 'N/A')} ---")
+                try:
+                    lancamento.preencher_lancamento(current_lancamento, config)
+                    log.info("Entry processed successfully.")
+                    current_lancamento = next(lancamentos_iterator, None) # Move to the next item
+                except Exception as e:
+                    log.error(f"Failed to process entry. Error: {e}", exc_info=True)
+                    # Decide on error handling: skip, retry, or stop. For now, we'll skip.
+                    current_lancamento = next(lancamentos_iterator, None)
+
+            else:
+                log.warning(f"Unhandled state: {current_state}. Waiting...")
+                time.sleep(3)
 
     except Exception as e:
-        log.critical(f"A fatal and unexpected error occurred in the main orchestration: {e}", exc_info=True)
+        log.critical(f"A fatal error occurred in the state machine controller: {e}", exc_info=True)
 
     finally:
         log.info("============================================")
         log.info("========= AUTOMATION FINISHED =========")
-        if dados_lancamentos is not None:
-            log.info(f"Total Entries Planned: {len(dados_lancamentos)}")
-            log.info(f"  -> Successes: {sucessos}")
-            log.info(f"  -> Failures:  {falhas}")
-        else:
-            log.info("No data was loaded to process.")
         log.info("============================================")

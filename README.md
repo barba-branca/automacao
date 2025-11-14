@@ -1,28 +1,23 @@
-# Automação de Lançamentos Contábeis para Domínio Contábil
+# Automação de Lançamentos Contábeis para Domínio Contábil (100% Autônoma)
 
-Este projeto contém uma automação completa e robusta, desenvolvida em Python, para realizar lançamentos contábeis no sistema Domínio Contábil (Thomson Reuters) a partir de dados extraídos de planilhas Excel.
+Este projeto contém uma automação completa e robusta, desenvolvida em Python, para realizar lançamentos contábeis no sistema Domínio Contábil (Thomson Reuters). A automação é projetada para ser **100% hands-free**, iniciando o processo desde a abertura do navegador, passando por múltiplos estágios de login, até a inserção dos dados a partir de planilhas Excel.
 
-A automação é projetada para ser resiliente, modular e pronta para um ambiente de produção, lidando com as instabilidades de uma interface gráfica acessada via RDP.
+A arquitetura é baseada em uma **máquina de estados simplificada**, que permite que a automação detecte em qual tela do processo ela se encontra e execute a ação correta, garantindo alta resiliência e capacidade de recuperação.
 
 ## Arquitetura
 
-O projeto é estruturado como um pacote Python (`automation`) para garantir a modularidade e a clareza do código.
-
--   `run.py`: Ponto de entrada principal da aplicação. Execute este arquivo para iniciar a automação.
--   `requirements.txt`: Lista de todas as dependências Python.
--   `config.json`: Arquivo de configuração central para definir caminhos de planilhas, timeouts e outros parâmetros sem alterar o código.
--   `/automation/`: Pacote Python contendo toda a lógica da automação.
-    -   `main.py`: Orquestrador principal que gerencia o fluxo da automação.
-    -   `logger.py`: Módulo de logging centralizado.
-    -   `utils.py`: Funções utilitárias de baixo nível para interação com a UI (clique, busca de imagem, digitação) usando PyAutoGUI e OpenCV.
-    -   `excel_reader.py`: Módulo para ler e processar as planilhas do Excel, com normalização de colunas e tratamento de aliases.
-    -   `rdp.py`: Função para iniciar a conexão RDP (se necessário).
-    -   `dominio.py`: Funções de alto nível para navegar nos menus do sistema Domínio.
-    -   `plano_contas_selector.py`: Módulo crítico e dedicado para interagir com a janela de seleção do Plano de Contas.
-    -   `lancamento.py`: Módulo que orquestra o preenchimento de um único lançamento contábil.
--   `/imagens/`: Diretório onde você **deve** salvar as imagens (templates) que a automação usará para encontrar os elementos da UI.
--   `/logs/`: Diretório onde os arquivos de log serão salvos.
--   `/screenshots/`: Diretório onde as capturas de tela de erros serão salvas automaticamente.
+-   `run.py`: Ponto de entrada principal da aplicação.
+-   `requirements.txt`: Lista de dependências Python.
+-   `config.json`: Arquivo de configuração para parâmetros não-sensíveis (URLs, caminhos, timeouts).
+-   `/automation/`: Pacote Python contendo toda a lógica.
+    -   `main.py`: Orquestrador principal, implementado como um controlador de estados.
+    -   `login_auto.py`: **Novo!** Módulo que gerencia o fluxo de login 100% automático.
+    -   `utils.py`: Funções de base para automação de UI (PyAutoGUI + OpenCV).
+    -   `excel_reader.py`: Módulo de leitura e processamento de Excel.
+    -   `dominio.py`: Funções para navegação nos menus internos do Domínio.
+    -   ... (outros módulos de negócio)
+-   `/imagens/`: Diretório para os templates visuais (imagens) da automação.
+-   `/logs/` e `/screenshots/`: Diretórios para logs detalhados e capturas de tela de erros.
 
 ---
 
@@ -31,74 +26,71 @@ O projeto é estruturado como um pacote Python (`automation`) para garantir a mo
 ### 1. Pré-requisitos
 
 -   Python 3.8 ou superior.
--   Acesso a um ambiente Windows onde a automação será executada (necessário para PyAutoGUI e `mstsc.exe`).
--   O sistema Domínio Contábil acessível via Conexão de Área de Trabalho Remota (RDP) ou localmente.
+-   Ambiente Windows.
+-   Navegador web (Chrome, Edge, etc.) instalado.
 
 ### 2. Instalação das Dependências
-
-Abra um terminal ou prompt de comando, navegue até a pasta raiz do projeto e execute:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configuração do `config.json`
+### 3. Configuração do `config.json` (CRÍTICO)
 
-Edite o arquivo `config.json` na raiz do projeto:
+Edite o arquivo `config.json` na raiz do projeto. Ele **não contém senhas**.
 
 ```json
 {
+  "browser_path": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "login_url": "https://ts-plusx1.kblcontabilidade.com.br/",
   "planilha1": "Controle_de_Emprestimos_CDR_2025.xlsx",
   "planilha2": "Controle_Apropriacao_UTI_Movel.xlsx",
   "timeout": 25,
-  "delay": 0.3,
-  "atalhos": {
-    "plano_contas": ["fn", "f2"]
-  }
+  "delay": 0.3
 }
 ```
 
--   **planilha1 / planilha2**: Coloque os nomes dos seus arquivos Excel aqui. Eles devem estar na **raiz do projeto**. Deixe uma string vazia ("") se não for usar.
--   **timeout**: Tempo máximo (em segundos) que a automação esperará por um elemento visual na tela. Aumente este valor se a conexão RDP for lenta.
--   **delay**: Pequeno atraso entre as ações para simular um comportamento mais humano.
--   **atalhos.plano_contas**: Teclas de atalho para abrir a janela do Plano de Contas. Ajuste conforme necessário.
+-   `browser_path`: **Obrigatório.** O caminho completo para o executável do seu navegador. Use barras normais (`/`) mesmo no Windows.
+-   `login_url`: A URL do portal de login.
+-   `planilha1 / planilha2`: Nomes dos arquivos Excel na raiz do projeto.
+-   `timeout`: Tempo de espera padrão para encontrar imagens.
 
-### 4. Captura das Imagens (Passo Crítico)
+### 4. Configuração de Credenciais (Variáveis de Ambiente)
 
-A automação depende 100% de imagens para "ver" a tela. Você precisa capturar pequenas áreas da tela do sistema Domínio e salvá-las como arquivos `.png` dentro da pasta `/imagens`.
+Para máxima segurança, as credenciais **não** são salvas em arquivos. Você deve configurá-las como variáveis de ambiente no sistema onde a automação irá rodar.
 
-**Regras para as imagens:**
--   Capture uma área pequena e **única** do elemento. Evite capturar áreas que mudam (como texto ao redor).
--   Os nomes dos arquivos devem corresponder exatamente aos usados no código. A lista completa de imagens necessárias está no código de cada módulo (`dominio.py`, `plano_contas_selector.py`, `lancamento.py`).
--   **Exemplo:** Para `menu_contabilidade.png`, capture apenas o texto "Contabilidade" do menu principal.
+**Variáveis Necessárias:**
+-   `DOMINIO_USER`: Seu nome de usuário para o portal web KBL.
+-   `DOMINIO_PASS`: Sua senha para o portal web KBL.
+-   `RDP_PASS`: Sua senha para o pop-up do Windows/RemoteApp.
 
-### 5. Preparação dos Arquivos Excel
+**Como configurar no Windows (Terminal):**
+```cmd
+set DOMINIO_USER="seu_usuario_web"
+set DOMINIO_PASS="sua_senha_web"
+set RDP_PASS="sua_senha_rdp"
+```
+*(Nota: Variáveis definidas assim duram apenas para a sessão do terminal atual. Para configurar permanentemente, use o painel "Editar as variáveis de ambiente do sistema").*
 
--   Coloque os arquivos `.xlsx` nomeados no `config.json` na pasta **raiz do projeto**.
--   Garanta que eles contenham as colunas necessárias. O `excel_reader.py` é flexível com os nomes das colunas (ex: "debito", "Debitar", "conta_debito" são todos válidos), mas os dados devem ser precisos.
+### 5. Captura das Imagens (Passo Crítico)
 
-### 6. Execução da Automação
+A automação depende 100% de imagens para funcionar. Salve capturas de tela pequenas e únicas na pasta `/imagens`. **O novo fluxo de login automático requer novas imagens.** O código em `login_auto.py` irá listar os nomes de arquivo que ele espera.
 
-Com tudo configurado, abra um terminal na raiz do projeto e execute:
+**Novas imagens necessárias (Exemplos):**
+-   `login_kbl_entrar_btn.png`: O botão "Entrar" da tela de login web.
+-   `remoteapp_launch_btn.png`: O botão para iniciar a sessão RemoteApp após o login web.
+-   `login_remoteapp_ok_btn.png`: O botão "OK" do pop-up de senha do Windows.
+-   ...e outras, conforme definido nas constantes dos arquivos `.py`.
 
+### 6. Execução
+
+Após configurar o `config.json` e as variáveis de ambiente, execute a automação:
 ```bash
 python run.py
 ```
-
-A automação irá iniciar. Acompanhe os logs no console e, para mais detalhes, verifique o arquivo `logs/automation.log`. Em caso de erro, uma captura de tela será salva em `/screenshots`.
+O robô irá abrir o navegador, realizar todo o processo de login e iniciar os lançamentos sem qualquer intervenção humana.
 
 ---
+## Sugestões de Melhoria
 
-## Sugestões de Melhoria e Otimização
-
-1.  **Gestão de Credenciais**: Atualmente, a automação de RDP (`rdp.py`) abre um arquivo `.rdp` pré-configurado. Para um ambiente de produção mais seguro, integre a automação com um cofre de senhas (como HashiCorp Vault, Azure Key Vault ou Windows Credential Manager) para buscar as credenciais em tempo de execução.
-
-2.  **Máquina de Estados**: Para automações muito longas e complexas, um simples loop `for` pode ser frágil. Implementar uma arquitetura de máquina de estados permitiria que a automação se recuperasse de erros de forma mais inteligente. Por exemplo, se o sistema Domínio travar, uma máquina de estados poderia detectar isso, reiniciar a aplicação e continuar do ponto onde parou.
-
-3.  **Filas de Trabalho (Queues)**: Em vez de ler diretamente de um Excel, a automação poderia consumir itens de uma fila (RabbitMQ, SQS, ou até mesmo uma tabela em um banco de dados). Uma aplicação separada (um "produtor") poderia ler o Excel e popular a fila. Isso desacopla a extração de dados da execução da automação, permitindo reprocessamento fácil de itens com falha e paralelização do trabalho.
-
-4.  **Técnicas de Visão Computacional Avançadas**:
-    -   **Adaptação a Temas/Resoluções**: Se a automação precisa rodar em máquinas com temas (claro/escuro) ou resoluções diferentes, o template matching pode falhar. Uma solução seria ter conjuntos de imagens para cada tema/resolução ou usar algoritmos de feature matching (como SIFT ou ORB) que são mais resilientes a pequenas variações.
-    -   **OCR (Optical Character Recognition)**: Em vez de depender de imagens para tudo, usar uma biblioteca de OCR (como Tesseract via `pytesseract`) para ler textos na tela poderia tornar a automação mais robusta. Por exemplo, para confirmar que uma janela com um título específico ("Plano de Contas") realmente abriu.
-
-5.  **Relatórios de Execução**: Ao final da execução, a automação poderia gerar um relatório detalhado em formato HTML ou Excel, listando cada lançamento processado, seu status (sucesso/falha), a mensagem de erro (se houver) e um link para o screenshot da falha.
+A gestão de credenciais via variáveis de ambiente é um grande avanço em segurança. Para ambientes corporativos de alta segurança, o próximo passo seria integrar a automação com um cofre de segredos dedicado, como **HashiCorp Vault**, **Azure Key Vault**, ou **AWS Secrets Manager**.
