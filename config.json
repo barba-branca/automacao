@@ -3,6 +3,7 @@
   "login_url": "https://ts-plusx1.kblcontabilidade.com.br/",
   "planilha1": "Controle_de_Emprestimos_CDR_2025.xlsx",
   "planilha2": "Controle_Apropriacao_UTI_Movel.xlsx",
+  "excel_header_row": 0,
   "timeout": 25,
   "delay": 0.3,
   "atalhos": {
