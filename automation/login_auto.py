@@ -1,6 +1,7 @@
 import os
 import subprocess
 import time
+import pyautogui
 from typing import Dict, Any
 
 from .logger import log
@@ -10,9 +11,8 @@ from .utils import click_on_image, wait_for_window, safe_type, handle_errors_and
 # The user MUST capture these specific images for the login flow to work.
 
 # KBL Web Login Screen
-IMG_LOGIN_KBL_USER_FIELD = "login_kbl_user_field.png" # The username input box
-IMG_LOGIN_KBL_PASS_FIELD = "login_kbl_pass_field.png" # The password input box
-IMG_LOGIN_KBL_ENTRAR_BTN = "login_kbl_entrar_btn.png"   # The 'Entrar' button
+IMG_LOGIN_KBL_FORM = "login_kbl_web.png"           # The overall form area
+IMG_LOGIN_KBL_ENTRAR_BTN = "login_kbl_entrar_btn.png"   # The 'Entrar' button - STILL NEEDED
 
 # Post-Login / RemoteApp Launch Screen
 IMG_REMOTEAPP_LAUNCH_ICON = "remoteapp_launch_icon.png" # The icon/button to launch the RDP session
@@ -32,30 +32,37 @@ def open_browser_and_navigate(config: Dict[str, Any]):
     url = config.get("login_url")
 
     log.info(f"Opening browser at: {browser_path}")
-    # Using Popen for better control (e.g., to manage the process later if needed)
     subprocess.Popen([browser_path, '--start-maximized', url])
     log.info(f"Navigating to: {url}")
-    # We don't need to type the URL as it's opened directly.
-    # We need to wait for the page to load.
-    if not wait_for_window(IMG_LOGIN_KBL_USER_FIELD, config, timeout=20):
+
+    if not wait_for_window(IMG_LOGIN_KBL_FORM, config, timeout=20):
         raise Exception("Browser opened, but KBL login page did not load or was not recognized.")
     log.info("Browser is open and login page is ready.")
 
 @handle_errors_and_screenshot
 def perform_web_login(config: Dict[str, Any]):
-    """Fills the KBL web login form and submits."""
+    """Fills the KBL web login form using keyboard navigation and submits."""
     user = os.getenv("DOMINIO_USER")
     password = os.getenv("DOMINIO_PASS")
     if not user or not password:
         raise ValueError("Environment variables DOMINIO_USER and DOMINIO_PASS must be set.")
 
-    log.info("Performing web login.")
-    click_on_image(IMG_LOGIN_KBL_USER_FIELD, config)
+    log.info("Performing web login using keyboard navigation.")
+    # Click the main form to ensure it has focus
+    click_on_image(IMG_LOGIN_KBL_FORM, config)
+    time.sleep(0.5)
+
+    # Assuming the first action after click is typing in the username field
+    log.info("Typing username...")
     safe_type(user)
 
-    click_on_image(IMG_LOGIN_KBL_PASS_FIELD, config)
+    pyautogui.press('tab')
+    time.sleep(0.3)
+
+    log.info("Typing password...")
     safe_type(password)
 
+    # Click the 'Entrar' button by image
     click_on_image(IMG_LOGIN_KBL_ENTRAR_BTN, config)
     log.info("Web login submitted.")
 
@@ -81,6 +88,8 @@ def perform_remoteapp_login(config: Dict[str, Any]):
         raise Exception("RemoteApp credentials popup did not appear.")
 
     log.info("Entering RemoteApp password.")
+    # This part can also be refactored to use keyboard nav if needed,
+    # but an image for the password field is generally more reliable in popups.
     click_on_image(IMG_REMOTEAPP_PASS_FIELD, config)
     safe_type(rdp_pass)
 
