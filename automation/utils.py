@@ -119,6 +119,25 @@ def wait_for_window(image_name: str, config: Dict[str, Any], timeout: int = 20) 
     log.warning("Wait for window timed out.")
     return False
 
+@handle_errors_and_screenshot
+def wait_for_screen_to_vanish(image_name: str, config: Dict[str, Any], timeout: int = 20) -> bool:
+    """
+    Waits for a UI element (identified by an image) to disappear from the screen.
+    This is useful for confirming that an action, like a button click, has worked.
+    """
+    log.info(f"Waiting for screen element '{image_name}' to disappear...")
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        # We use a very short timeout and low confidence for disappearance check.
+        location = find_image_on_screen(image_name, config, timeout=1, confidence=0.7)
+        if location is None:
+            log.info(f"Screen element '{image_name}' has disappeared.")
+            return True
+        time.sleep(0.5)
+
+    log.warning(f"Screen element '{image_name}' did not disappear after {timeout} seconds.")
+    return False
+
 # Functions that don't depend on config are unchanged
 @handle_errors_and_screenshot
 def safe_type(text: str, delay: float = 0.05):
